@@ -1,0 +1,4 @@
+enum ScriptRuntimeOutputStreamType {
+   STDOUT,
+   STDERR
+}
