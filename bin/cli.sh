@@ -44,5 +44,5 @@ if [[ -f "${SCRIPT_FILE}" ]]; then
     -e 'SESSION_TMP_DIR' \
     -v "${SESSION_TMP_DIR}:${SESSION_TMP_DIR}" \
     -v "${SCRIPT_FILE}:${SCRIPT_FILE}:ro" \
-    cucumber-bash -r "host.docker.internal:${HOST_BRIDGE_PORT}" ${SCRIPT_FILE}
+    shellspec-remote -r "host.docker.internal:${HOST_BRIDGE_PORT}" ${SCRIPT_FILE}
 fi

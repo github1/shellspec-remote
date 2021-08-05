@@ -32,9 +32,9 @@ class Main implements Callable<Integer> {
    public Integer call() {
       int status = -1;
       Path userDir = Paths.get(System.getProperty("user.dir"));
-      List<Path> tempScripts = new ArrayList<>();
+      List<Utils.TempSpec> tempScripts = new ArrayList<>();
       try {
-         List<String> specs = new ArrayList<>();
+         List<Utils.Spec> specs = new ArrayList<>();
          if (script.isFile()) {
             acceptFile(script.toPath(), specs);
          } else if (script.isDirectory()) {
@@ -49,10 +49,11 @@ class Main implements Callable<Integer> {
                  replaced -> {
                     String replacedScript = replaced.getReplacedScript();
                     LOG.debug("Using replaced script {}", replacedScript);
-                    Path tempScript = userDir.resolve(
+                    Path tempScriptPath = userDir.resolve(
                             "tmp" + UUID.randomUUID() + "_spec.sh");
-                    tempScripts.add(tempScript);
-                    Utils.writeFile(tempScript, replacedScript);
+                    tempScripts.add(
+                            new Utils.TempSpec(tempScriptPath, replaced));
+                    Utils.writeFile(tempScriptPath, replacedScript);
                  });
 
          List<String> command = new ArrayList<>();
@@ -61,7 +62,8 @@ class Main implements Callable<Integer> {
          command.add("bash");
          command.add("--color");
          if (tempScripts.size() == 1) {
-            command.add(tempScripts.get(0).toAbsolutePath().toString());
+            command.add(
+                    tempScripts.get(0).getPath().toAbsolutePath().toString());
          } else {
             command.add(userDir.toAbsolutePath().toString());
          }
@@ -69,31 +71,40 @@ class Main implements Callable<Integer> {
          status = runtime.execute(
                  command.toArray(new String[0]),
                  outputLine -> {
+                    String line = Utils.rewriteFailureLines(tempScripts,
+                            outputLine.getLine());
                     if (ScriptRuntimeOutputStreamType.STDOUT.equals(
                             outputLine.getStream())) {
-                       System.out.println(outputLine.getLine());
+                       System.out.println(line);
                     } else if (ScriptRuntimeOutputStreamType.STDERR.equals(
                             outputLine.getStream())) {
-                       System.err.println(outputLine.getLine());
+                       System.err.println(line);
                     }
                  }).waitFor();
+         // Wait a bit for the output to catch up
+         Thread.sleep(500);
       } catch (Exception e) {
          LOG.error("Unexpected error", e);
       } finally {
-         tempScripts.forEach(Utils::deleteFile);
+         tempScripts.stream().map(Utils.TempSpec::getPath).forEach(
+                 Utils::deleteFile);
       }
       return status;
    }
-   private static void acceptFile(Path item, List<String> specs) {
+   private static void acceptFile(Path item, List<Utils.Spec> specs) {
       if (item.toString().endsWith(".md")) {
          specs.addAll(Utils.extractMarkdownSnippets("bash",
-                 Utils.readFile(item)).stream().filter(
-                 snippet -> snippet.contains(
-                         "Describe") || snippet.contains(
-                         "When") || snippet.contains("It")).collect(
-                 Collectors.toList()));
+                         Utils.readFile(item)).stream().filter(
+                         snippet -> snippet.getContent().contains(
+                                 "Describe") || snippet.getContent().contains(
+                                 "When") || snippet.getContent().contains("It"))
+                 .map(snippet -> new Utils.Spec(item, snippet.getContent(),
+                         snippet.getStartLine()))
+                 .collect(
+                         Collectors.toList()));
       } else if (item.toString().endsWith(".sh")) {
-         specs.add(String.join("\n", Utils.readFile(item)));
+         specs.add(
+                 new Utils.Spec(item, String.join("\n", Utils.readFile(item))));
       }
    }
 }

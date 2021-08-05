@@ -16,12 +16,26 @@ ln -s ${PWD}/shellspec-remote/bin/cli.sh /usr/local/bin/shellspec-remote
 ## Usage
 
 ```
-shellspec-remote some_spec.sh
+shellspec-remote ./README.md
 ```
 
 ## Examples
 
 ```bash
+# @OnHost
+setup() {
+  bash -c "while true; do sleep 1; done" &
+  BPID=$!
+}
+# @OnHost
+cleanup() {
+  if [[ -n "${BPID}" ]]; then
+    echo "killing ${BPID}"
+    kill -9 ${BPID}
+  else
+    echo "BPID not found"
+  fi
+}
 # @OnHost
 remote_uname() {
   uname -a
@@ -37,6 +51,8 @@ local_uname() {
   uname -a
 }
 Context 'shellspec-remote'
+  BeforeAll 'setup'
+  AfterAll 'cleanup'
   Describe 'calling a function with the @OnHost annotation'
       It 'should execute on the docker host'
         When call remote_uname

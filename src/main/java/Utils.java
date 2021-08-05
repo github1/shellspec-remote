@@ -1,4 +1,5 @@
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,8 +13,11 @@ import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -84,16 +88,20 @@ final class Utils {
       return Base64.getEncoder().encodeToString(value.getBytes(
               StandardCharsets.UTF_8));
    }
-   static List<String> extractMarkdownSnippets(String type,
-                                               List<String> lines) {
-      List<String> snippets = new ArrayList<>();
+   static List<Snippet> extractMarkdownSnippets(String type,
+                                                List<String> lines) {
+      List<Snippet> snippets = new ArrayList<>();
       List<String> buffer = null;
+      int lineNumber = 0;
+      int startLine = 0;
       for (String line : lines) {
+         lineNumber++;
          if (buffer == null && line.trim().equals("```" + type)) {
+            startLine = lineNumber;
             buffer = new ArrayList<>();
          } else if (buffer != null) {
             if (line.trim().equals("```")) {
-               snippets.add(String.join("\n", buffer));
+               snippets.add(new Snippet(startLine, String.join("\n", buffer)));
                buffer = null;
             } else {
                buffer.add(line);
@@ -102,14 +110,22 @@ final class Utils {
       }
       return snippets;
    }
-   static RemoteFunctionReplacement replaceRemoteFunctions(String script,
+   static RemoteFunctionReplacement replaceRemoteFunctions(Spec spec,
                                                            HostPort remoteHostPort) {
+      return replaceRemoteFunctions(spec, remoteHostPort,
+              (fn) -> fn + UUID.randomUUID());
+   }
+   static RemoteFunctionReplacement replaceRemoteFunctions(Spec spec,
+                                                           HostPort remoteHostPort,
+                                                           Function<String, String> idGenerator) {
       String sessionTempDir = Optional.ofNullable(
               System.getenv("SESSION_TMP_DIR")).orElse("/tmp");
+      String remoteFunctionProxyName = "f_invoke_remote";
       Map<String, String> extracted = new LinkedHashMap<>();
-      String[] holder = {script};
+      List<Replacement> replacements = new ArrayList<>();
       boolean[] hostAnnotationActive = {false};
-      int[] offset = {0};
+      int[] hostAnnotationStartPos = {0};
+      String script = spec.getContent();
       Parser.Node node = Parser.parse(script);
       node.accept(new Parser.NodeVisitor() {
          @Override
@@ -117,47 +133,28 @@ final class Utils {
             if (node.getType().equals("comment")) {
                if (node.getValue().contains("@OnHost")) {
                   hostAnnotationActive[0] = true;
+                  hostAnnotationStartPos[0] = node.getStartPos();
                }
             } else {
                if ("function".equals(node.getType())) {
                   if (hostAnnotationActive[0]) {
-                     Parser.Node body = node.getLastChild();
-                     int startPos = body.getStartPos() + offset[0];
-                     int endPos = body.getLastChild().getStartPos() + offset[0];
-                     int origLength = endPos - startPos;
-                     String before = holder[0].substring(0, startPos);
-                     String func = holder[0].substring(startPos,
-                             endPos + 1);
-                     String funcID = "F" + UUID.randomUUID().toString().replace(
-                             "-", "_");
-                     func = func.trim().replaceAll("^\\{\n|\n}$", "");
-                     extracted.put(funcID, func);
-                     String beforeChange = holder[0];
-                     String responseFile = sessionTempDir + "/responsefile${l_UUID}";
-                     String placeHolder = "{\n" +
-                             "local l_UUID=$(" +
-                             genUUID() +
-                             ")\n" +
-                             "echo 'invoke; '${l_UUID}' " +
-                             funcID +
-                             " '$(echo \"$@\" | base64) | " +
-                             ncSend(remoteHostPort) +
-                             "\n" +
-                             "while [[ ! -f \"" +
-                             responseFile + "\" ]]; do\n" +
-                             "sleep .25\n" +
-                             "done\n" + "cat " +
-                             responseFile +
-                             "\n";
-                     holder[0] = before + placeHolder;
-                     while (holder[0].length() < endPos) {
-                        holder[0] += " ";
-                     }
-                     if (placeHolder.length() > origLength) {
-                        offset[0] = placeHolder.length() - origLength;
-                     }
-                     String after = beforeChange.substring(endPos);
-                     holder[0] += after;
+                     Optional<Parser.Node> maybeBody = node.getChildren().stream().filter(
+                             n -> "script".equals(n.getType())).findFirst();
+                     maybeBody.ifPresent(body -> {
+                        int startPos = body.getStartPos();
+                        int endPos = node.getEndPos();
+                        String func = script.substring(
+                                body.getChildren().get(0).getStartPos(),
+                                body.getEndPos()).trim();
+                        String funcID = "F" + idGenerator.apply(
+                                node.getValue()).replaceAll("(?i)[^a-z]+", "_");
+                        extracted.put(funcID, func);
+                        String remoteFunctionProxy = "{\n" + remoteFunctionProxyName + " " + funcID + " $@\n}";
+                        replacements.add(
+                                new Replacement(hostAnnotationStartPos[0] - 1,
+                                        startPos, endPos,
+                                        remoteFunctionProxy));
+                     });
                   }
                }
                // No longer in a comment, deactivate this
@@ -165,6 +162,21 @@ final class Utils {
             }
          }
       });
+      StringBuilder replacedScript = new StringBuilder();
+      Replacement previousReplacement = null;
+      for (int i = 0; i < replacements.size(); i++) {
+         Replacement replacement = replacements.get(i);
+         Replacement nextReplacement = replacements.size() > i + 1 ? replacements.get(
+                 i + 1) : null;
+         int prevEnd = previousReplacement == null ? 0 : previousReplacement.getEndPos();
+         int nextStart = nextReplacement == null ? script.length() : (nextReplacement.getAnnotStartPos());
+         String start = script.substring(prevEnd, replacement.getStartPos());
+         String end = script.substring(replacement.getEndPos(),
+                 nextStart);
+         replacedScript.append(start).append(
+                 replacement.getNewContent()).append(end);
+         previousReplacement = replacement;
+      }
       StringBuilder finalScript = new StringBuilder();
       for (Map.Entry<String, String> func : extracted.entrySet()) {
          StringBuilder funcWrapper = new StringBuilder("function ").append(
@@ -176,77 +188,182 @@ final class Utils {
                  funcWrapper.toString())).append("' | ").append(Utils.ncSend(
                  remoteHostPort)).append("\n");
       }
-      finalScript.append(holder[0].replaceAll("^#!.*", ""));
-      return new RemoteFunctionReplacement(finalScript.toString(), extracted);
+      String responseFile = sessionTempDir + "/responsefile${l_UUID}";
+      String remoteFunctionProxy = remoteFunctionProxyName + "(){\n" +
+              "local l_FID=\"${1}\"\n" +
+              "shift\n" +
+              "local l_UUID=$(" +
+              genUUID() +
+              ")\n" +
+              "echo 'invoke; '${l_UUID}' '${l_FID}'" +
+              " '$(echo \"$@\" | base64) | " +
+              ncSend(remoteHostPort) +
+              "\n" +
+              "while [[ ! -f \"" +
+              responseFile + "\" ]]; do\n" +
+              "sleep .25\n" +
+              "done\n" + "cat " +
+              responseFile +
+              "\n}\n";
+      finalScript.append(remoteFunctionProxy);
+      finalScript.append(replacedScript.toString().replaceAll("^#!.*", ""));
+      return new RemoteFunctionReplacement(spec, finalScript.toString(),
+              extracted);
    }
-   static <T> List<T> takeUntil(Queue<T> queue, Predicate<T> until) {
-      List<T> items = new ArrayList<>();
-      while (!queue.isEmpty()) {
-         T peek = queue.peek();
-         if (until.negate().test(peek)) {
-            items.add(queue.poll());
-         } else {
-            break;
-         }
+   static class Snippet {
+      private final int startLine;
+      private final String content;
+      Snippet(int startLine, String content) {
+         this.startLine = startLine;
+         this.content = content;
       }
-      return items;
+      public int getStartLine() {
+         return startLine;
+      }
+      public String getContent() {
+         return content;
+      }
    }
+
+   static class Spec {
+      private final Path path;
+      private final String content;
+      private final int contentStartLine;
+      Spec(Path path, String content) {
+         this(path, content, 0);
+      }
+      Spec(Path path, String content, int contentStartLine) {
+         this.path = path;
+         this.content = content;
+         this.contentStartLine = contentStartLine;
+      }
+      public Path getPath() {
+         return path;
+      }
+      public String getContent() {
+         return content;
+      }
+      public int getContentStartLine() {
+         return contentStartLine;
+      }
+   }
+
+   static class TempSpec {
+      private final Path path;
+      private final RemoteFunctionReplacement replacement;
+      TempSpec(Path path, RemoteFunctionReplacement replacement) {
+         this.path = path;
+         this.replacement = replacement;
+      }
+      public Path getPath() {
+         return path;
+      }
+      public RemoteFunctionReplacement getReplacement() {
+         return replacement;
+      }
+   }
+
    static class RemoteFunctionReplacement {
-      private final Map<String, String> extracted;
+      private final Spec spec;
       private final String replacedScript;
-      RemoteFunctionReplacement(String replacedScript,
+      private final Map<String, String> extracted;
+      RemoteFunctionReplacement(Spec spec, String replacedScript,
                                 Map<String, String> extracted) {
+         this.spec = spec;
          this.replacedScript = replacedScript;
          this.extracted = extracted;
       }
-      public Map<String, String> getExtracted() {
-         return extracted;
+      public Spec getSpec() {
+         return spec;
       }
       public String getReplacedScript() {
          return replacedScript;
+      }
+      public Map<String, String> getExtracted() {
+         return extracted;
       }
    }
    static <T> Stream<T> generate(
            Consumer<Consumer<T>> producer) {
       AtomicBoolean isDone = new AtomicBoolean(false);
       return Stream.generate(new Supplier<T>() {
-         private final Object initialLock = new Object();
-         private final ConcurrentLinkedQueue<T> items = new ConcurrentLinkedQueue<>();
-         private Thread finder = null;
-         @Override
-         public T get() {
-            if (finder == null) {
-               finder = new Thread(
-                       () -> {
-                          producer.accept(
-                                  item -> {
-                                     items.add(item);
-                                     synchronized (initialLock) {
-                                        initialLock.notify();
-                                     }
-                                  });
-                          isDone.set(true);
-                       });
-               finder.start();
-               synchronized (initialLock) {
-                  try {
-                     initialLock.wait();
-                  } catch (InterruptedException e) {
-                     // ignore
+                 private final Object initialLock = new Object();
+                 private final ConcurrentLinkedQueue<T> items = new ConcurrentLinkedQueue<>();
+                 private Thread finder = null;
+                 @Override
+                 public T get() {
+                    if (finder == null) {
+                       finder = new Thread(
+                               () -> {
+                                  producer.accept(
+                                          item -> {
+                                             items.add(item);
+                                             synchronized (initialLock) {
+                                                initialLock.notify();
+                                             }
+                                          });
+                                  isDone.set(true);
+                               });
+                       finder.start();
+                       synchronized (initialLock) {
+                          try {
+                             initialLock.wait();
+                          } catch (InterruptedException e) {
+                             // ignore
+                          }
+                       }
+                    }
+                    while (items.peek() == null && !isDone.get()) {
+                       sleepQuietly(100);
+                    }
+                    return items.poll();
+                 }
+              })
+              .takeWhile(Objects::nonNull);
+   }
+   static String rewriteFailureLines(
+           List<TempSpec> tempSpecs,
+           String line) {
+      try {
+         if (!StringUtils.isEmpty(line)) {
+            Pattern failureLinePattern = Pattern.compile(
+                    ".* (tmp[^.]+\\.sh):([0-9]+)(.*)");
+            Matcher matcher = failureLinePattern.matcher(line);
+            if (matcher.matches()) {
+               String fileName = matcher.group(1);
+               int lineNumber = Integer.parseInt(matcher.group(2));
+               String rest = matcher.group(3);
+               for (TempSpec tempSpec : tempSpecs) {
+                  if (fileName.equals(
+                          tempSpec.getPath().getFileName().toString())) {
+                     Integer originalLineNumber = null;
+                     String[] replacedScriptLines = tempSpec.getReplacement().getReplacedScript().split(
+                             "\n");
+                     String lineText = replacedScriptLines[lineNumber - 1];
+                     String[] originalLines = tempSpec.getReplacement().getSpec().getContent().split(
+                             "\n");
+                     for (int i = 0; i < originalLines.length; i++) {
+                        if (originalLines[i].equals(lineText)) {
+                           originalLineNumber = (i + 1) + tempSpec.getReplacement().getSpec().getContentStartLine();
+                           break;
+                        }
+                     }
+                     if (line.replaceAll("\u001B\\[[;\\d]*m",
+                             "").trim().startsWith("shellspec ")) {
+                        return "\u001B[31mshellspec " + tempSpec.getReplacement().getSpec().getPath().getFileName().toString() + ":" + originalLineNumber + "\u001B[0m" + rest;
+                     } else {
+                        return "\u001B[36m          # " + tempSpec.getReplacement().getSpec().getPath().getFileName().toString() + ":" + originalLineNumber + "\u001B[0m";
+                     }
                   }
                }
             }
-            T item = items.poll();
-            if (item == null && !isDone.get()) {
-               while (items.peek() == null) {
-                  sleepQuietly(100);
-               }
-               item = items.poll();
-            }
-            return item;
          }
-      })
-              .takeWhile(Objects::nonNull);
+      } catch (Exception e) {
+         e.printStackTrace();
+         ;
+         throw new RuntimeException(e);
+      }
+      return line;
    }
    public static String ncSend(HostPort remoteHostPort) {
       List<Object> command = new ArrayList<>();
@@ -262,5 +379,30 @@ final class Utils {
    }
    public static String genUUID() {
       return "uuidgen";
+   }
+   private static class Replacement {
+      private final int annotStartPos;
+      private final int startPos;
+      private final int endPos;
+      private final String newContent;
+      private Replacement(int annotStartPos, int startPos, int endPos,
+                          String newContent) {
+         this.annotStartPos = annotStartPos;
+         this.startPos = startPos;
+         this.endPos = endPos;
+         this.newContent = newContent;
+      }
+      public int getAnnotStartPos() {
+         return annotStartPos;
+      }
+      public int getStartPos() {
+         return startPos;
+      }
+      public int getEndPos() {
+         return endPos;
+      }
+      public String getNewContent() {
+         return newContent;
+      }
    }
 }

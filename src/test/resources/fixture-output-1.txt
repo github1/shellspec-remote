@@ -1,0 +1,22 @@
+Running: /bin/bash [bash 5.0.3(1)-release]
+[1m[31mF[0m[1m[32m.[0m[1m[32m.[0mkilling 92264
+
+
+Examples:
+[37m  1) shellspec-remote calling a function with the @OnHost annotation should execute on the docker host[0m
+[1m[36m     When call remote_uname[0m
+
+     1.1) [31mThe output should match pattern *Darwins*[0m
+
+            [31mexpected "Darwin Johns-MacBook-Pro.local 18.7.0 Darwin Kernel Version 18.7.0: Tue Nov 10 00:07:31 PST 2020; root:xnu-4903.278.51~1/RELEASE_X86_64 x86_64" to match pattern "*Darwins*"[0m
+
+          [36m# tmpe50ae65c-eb3c-4aa3-850c-567e179ca981_spec.sh:32[0m
+
+Finished in 1.29 seconds (user 0.20 seconds, sys 0.10 seconds)
+[31m3 examples, 1 failure[0m
+
+
+[1m[31mFailure examples / Errors: [0m(Listed here [4maffect[0m your suite's status)
+
+[1m[31mshellspec tmpe50ae65c-eb3c-4aa3-850c-567e179ca981_spec.sh:32[0m [36m# 1) shellspec-remote calling a function with the @OnHost annotation should execute on the docker host FAILED[0m
+
