@@ -59,10 +59,6 @@ Context 'shellspec-remote'
         The output should match pattern "*Darwin*"
         The output should not equal "$(local_uname)"
       End
-      It 'can pipe output from remote functions to a local functions'
-        When call local_pipe_from_remote
-        The output should match pattern "*foo*"
-      End
   End
   Describe 'calling a function without the @OnHost annotation'
       It 'should execute inside the container'

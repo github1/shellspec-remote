@@ -16,6 +16,9 @@ trap cleanup exit
 function cleanup() {
   rm -rf "${SESSION_TMP_DIR}" || true
   pkill -fx "${HOST_BRIDGE_CMD}" || true
+  if [[ -n "${bridgePID}" ]]; then
+    kill -15 "${bridgePID}"
+  fi
 }
 
 BRIDGE_SCRIPT_PATH=$(dirname ${SCRIPT_DIR})/bridge.sh
@@ -29,6 +32,7 @@ export SESSION_TMP_DIR
 
 # start host bridge
 ${HOST_BRIDGE_CMD} | ${BRIDGE_SCRIPT_PATH} &
+bridgePID=$!
 
 mkdir -p "${SESSION_TMP_DIR}"
 

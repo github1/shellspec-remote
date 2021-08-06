@@ -23,6 +23,7 @@ import java.util.stream.Stream;
 
 final class Utils {
    private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
+   private static final Map<String, String> FILE_CACHE = new HashMap<>();
    private Utils() {
    }
    static void sleepQuietly(long ms) {
@@ -38,6 +39,16 @@ final class Utils {
    }
    static Path pathWithFallback(Path initial, Path fallback) {
       return Files.exists(initial) ? initial : fallback;
+   }
+   static String loadResource(String name) {
+      return FILE_CACHE.computeIfAbsent(name, s -> {
+         try {
+            return IOUtils.resourceToString(name, StandardCharsets.UTF_8,
+                    Utils.class.getClassLoader());
+         } catch (Exception e) {
+            throw new RuntimeException("Failed to load resource: " + name, e);
+         }
+      });
    }
    static List<String> readFile(Path path) {
       try {
@@ -59,6 +70,7 @@ final class Utils {
    static void deleteFile(Path path) {
       try {
          if (Files.exists(path)) {
+            LOG.debug("Deleting {}", path);
             Files.delete(path);
          }
       } catch (IOException e) {
@@ -188,23 +200,10 @@ final class Utils {
                  funcWrapper.toString())).append("' | ").append(Utils.ncSend(
                  remoteHostPort)).append("\n");
       }
-      String responseFile = sessionTempDir + "/responsefile${l_UUID}";
-      String remoteFunctionProxy = remoteFunctionProxyName + "(){\n" +
-              "local l_FID=\"${1}\"\n" +
-              "shift\n" +
-              "local l_UUID=$(" +
-              genUUID() +
-              ")\n" +
-              "echo 'invoke; '${l_UUID}' '${l_FID}'" +
-              " '$(echo \"$@\" | base64) | " +
-              ncSend(remoteHostPort) +
-              "\n" +
-              "while [[ ! -f \"" +
-              responseFile + "\" ]]; do\n" +
-              "sleep .25\n" +
-              "done\n" + "cat " +
-              responseFile +
-              "\n}\n";
+      String remoteFunctionProxy = loadResource("remote-function-proxy.sh")
+              .replace("<SESSION_TEMP_DIR>", sessionTempDir)
+              .replace("<GEN_UUID>", genUUID())
+              .replace("<NC_SEND>", ncSend(remoteHostPort));
       finalScript.append(remoteFunctionProxy);
       finalScript.append(replacedScript.toString().replaceAll("^#!.*", ""));
       return new RemoteFunctionReplacement(spec, finalScript.toString(),
