@@ -19,6 +19,6 @@ cat | while read message; do
     FUNC_ID=$(echo "${args}" | awk '{print $2}')
     FUNC_ARGS=$(echo "${args}" | awk '{$1=$2=""; print $0}' | base64 --decode)
     ${FUNC_ID} ${FUNC_ARGS} > ${SESSION_TMP_DIR}/responsefile${CALL_ID}
-    echo "exit; $?" >> ${SESSION_TMP_DIR}/responsefile${CALL_ID}
+    echo -e "\nexit; $?" >> ${SESSION_TMP_DIR}/responsefile${CALL_ID}
   fi
 done
