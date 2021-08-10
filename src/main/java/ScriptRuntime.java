@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -11,6 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 class ScriptRuntime {
    private static final Logger LOG = LoggerFactory.getLogger(
@@ -28,10 +30,16 @@ class ScriptRuntime {
    public Process execute(String[] command,
                           Consumer<ScriptRuntimeOutputLine> lineConsumer) {
       try {
-         Process process = Runtime.getRuntime().exec(command,
-                 environment.isEmpty() ? null : environment.keySet().stream().map(
-                         k -> String.format("%s=%s", k,
-                                 environment.get(k))).toArray(String[]::new));
+         if (environment != null && !environment.isEmpty()) {
+            String envVars = environment.keySet().stream().map(
+                    k -> String.format("export %s='%s'", k,
+                            environment.get(k))).collect(
+                    Collectors.joining(" && "));
+            String mainCommand = String.join(" ", command);
+            command = new String[]{"bash", "-c", envVars + " && exec " + mainCommand};
+         }
+         LOG.debug("execute {}", Arrays.toString(command));
+         Process process = Runtime.getRuntime().exec(command);
          Function<Consumer<ScriptRuntimeOutputLine>, Function<ScriptRuntimeOutputStreamType, Consumer<String>>> outputLine = consumer -> dataStream -> line -> {
             ScriptRuntimeOutputLine l = new ScriptRuntimeOutputLine(dataStream,
                     line,
@@ -66,5 +74,12 @@ class ScriptRuntime {
          new BufferedReader(new InputStreamReader(inputStream)).lines()
                  .forEach(consumer);
       }
+   }
+   private static Map<String, String> mergeEnv(Map<String, String> env) {
+      Map<String, String> merged = new HashMap<>(System.getenv());
+      if (env != null) {
+         merged.putAll(env);
+      }
+      return merged;
    }
 }

@@ -11,6 +11,13 @@ function func_stream_output() {
 }
 
 # @OnHost
+function func_stream_output_2() {
+  SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+  bash ${SCRIPT_DIR}/src/test/resources/fixture-main-include.sh &
+  wait $!
+}
+
+# @OnHost
 function func_fails() {
   return 1
 }

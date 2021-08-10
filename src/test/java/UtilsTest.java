@@ -31,6 +31,7 @@ public class UtilsTest {
       Utils.RemoteFunctionReplacement replaced = Utils.replaceRemoteFunctions(
               new Utils.Spec(Paths.get("fake.txt"),
                       "# @OnHost\nfunction something() {\nlocal ARG1=${1}\necho ${1} | \\ \n egrep '^function foo(a)$'\n}\nfoo=bar\nfunction normal_func() {\necho hi\n}\n# bloo\n# @OnHost\n# blah\nfunction something_else() {\n echo hi\n}"),
+              Collections.emptyMap(),
               HostPort.fromString("localhost:1234"));
       assertThat(replaced.getExtracted()).hasSize(2);
       assertThat(replaced.getExtracted().values().iterator().next()).contains(
@@ -47,6 +48,7 @@ public class UtilsTest {
                       "fixture-1.replaced.sh")), StandardCharsets.UTF_8);
       Utils.RemoteFunctionReplacement replaced = Utils.replaceRemoteFunctions(
               new Utils.Spec(Paths.get("fake.txt"), fixture),
+              Collections.emptyMap(),
               HostPort.fromString("localhost:1234"),
               fn -> fn);
       assertThat(replaced.getReplacedScript()).isEqualTo(fixtureReplaced);

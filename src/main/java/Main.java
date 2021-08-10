@@ -5,10 +5,7 @@ import picocli.CommandLine;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
@@ -37,6 +34,9 @@ class Main implements Callable<Integer> {
    }
    @Override
    public Integer call() {
+      Map<String, String> environmentVariablesMap = environmentVariables.stream().map(
+              value -> value.split("=")).collect(
+              Collectors.toMap(k -> k[0], v -> v[1]));
       int status = -1;
       Path userDir = Paths.get(System.getProperty("user.dir"));
       List<Utils.TempSpec> tempScripts = new ArrayList<>();
@@ -52,6 +52,7 @@ class Main implements Callable<Integer> {
          }
          specs.stream().map(spec -> Utils.replaceRemoteFunctions(
                  spec,
+                 environmentVariablesMap,
                  HostPort.fromString(remoteBridgeHostPort))).forEach(
                  replaced -> {
                     String replacedScript = replaced.getReplacedScript();
@@ -71,11 +72,7 @@ class Main implements Callable<Integer> {
             command.add(userDir.toAbsolutePath().toString());
          }
          ScriptRuntime runtime = new ScriptRuntime();
-         environmentVariables.stream().forEach(value -> {
-            String[] parts = value.split("=");
-            runtime.withEnvVar(parts[0], parts[1]);
-         });
-         // kill -SIGINT 12345
+         environmentVariablesMap.forEach(runtime::withEnvVar);
          Process proc = runtime.execute(
                  command.toArray(new String[0]),
                  outputLine -> {

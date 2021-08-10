@@ -7,10 +7,10 @@ f_invoke_remote() {
   local l_SESSION_TEMP_DIR="/tmp"
   local l_UUID=$(uuidgen)
   touch "${l_SESSION_TEMP_DIR}/responsefile${l_UUID}"
-  echo 'invoke; '${l_UUID}' '${l_FID}' '$(echo "$@" | base64) | nc localhost 1234
+  echo 'invoke; '${l_UUID}' '${l_FID}' '$(echo "$@" | base64) | nc localhost 1234 &
   tail -F "${l_SESSION_TEMP_DIR}/responsefile${l_UUID}" | while read line; do
     if echo $line | egrep -q '^exit; [0-9]+$'; then
-      pkill -9 -P $$ tail
+      pkill -fx "tail -F ${l_SESSION_TEMP_DIR}/responsefile${l_UUID}"
       break
     else
       echo $line

@@ -123,11 +123,13 @@ final class Utils {
       return snippets;
    }
    static RemoteFunctionReplacement replaceRemoteFunctions(Spec spec,
+                                                           Map<String, String> environmentVariables,
                                                            HostPort remoteHostPort) {
-      return replaceRemoteFunctions(spec, remoteHostPort,
+      return replaceRemoteFunctions(spec, environmentVariables, remoteHostPort,
               (fn) -> fn + UUID.randomUUID());
    }
    static RemoteFunctionReplacement replaceRemoteFunctions(Spec spec,
+                                                           Map<String, String> environmentVariables,
                                                            HostPort remoteHostPort,
                                                            Function<String, String> idGenerator) {
       String sessionTempDir = Optional.ofNullable(
@@ -190,15 +192,17 @@ final class Utils {
          previousReplacement = replacement;
       }
       StringBuilder finalScript = new StringBuilder();
+      environmentVariables.forEach(
+              (k, v) -> defineRemoteString("env_var_" + k,
+                      String.format("export %s='%s'", k, v),
+                      remoteHostPort, finalScript));
       for (Map.Entry<String, String> func : extracted.entrySet()) {
          StringBuilder funcWrapper = new StringBuilder("function ").append(
                  func.getKey()).append("() {\n");
          funcWrapper.append(func.getValue()).append("\n");
          funcWrapper.append("}\n");
-         finalScript.append("echo 'define; ").append(func.getKey()).append(
-                 " ").append(Utils.encodeBase64(
-                 funcWrapper.toString())).append("' | ").append(Utils.ncSend(
-                 remoteHostPort)).append("\n");
+         defineRemoteString(func.getKey(), funcWrapper.toString(),
+                 remoteHostPort, finalScript);
       }
       String remoteFunctionProxy = loadResource("remote-function-proxy.sh")
               .replace("<SESSION_TEMP_DIR>", sessionTempDir)
@@ -208,6 +212,14 @@ final class Utils {
       finalScript.append(replacedScript.toString().replaceAll("^#!.*", ""));
       return new RemoteFunctionReplacement(spec, finalScript.toString(),
               extracted);
+   }
+   private static void defineRemoteString(String id, String script,
+                                          HostPort remoteHostPort,
+                                          StringBuilder sb) {
+      sb.append("echo 'define; ").append(id).append(
+              " ").append(Utils.encodeBase64(
+              script)).append("' | ").append(Utils.ncSend(
+              remoteHostPort)).append("\n");
    }
    static class Snippet {
       private final int startLine;

@@ -22,11 +22,6 @@ function cleanup() {
 }
 
 BRIDGE_SCRIPT_PATH=$(dirname ${SCRIPT_DIR})/bridge.sh
-#if [[ -n "${BRIDGE_SCRIPT}" ]]; then
-#  BRIDGE_SCRIPT_PATH=${TMPDIR}/bridge.sh
-#  echo "${BRIDGE_SCRIPT}" | base64 --decode > ${BRIDGE_SCRIPT_PATH}
-#  chmod +x ${BRIDGE_SCRIPT_PATH}
-#fi
 
 export SESSION_TMP_DIR
 
@@ -37,6 +32,8 @@ bridgePID=$!
 mkdir -p "${SESSION_TMP_DIR}"
 
 SCRIPT_FILE=${1}
+shift
+SCRIPT_ARGS=$@
 
 if [[ -f "${SCRIPT_FILE}" ]]; then
 
@@ -48,5 +45,5 @@ if [[ -f "${SCRIPT_FILE}" ]]; then
     -e 'SESSION_TMP_DIR' \
     -v "${SESSION_TMP_DIR}:${SESSION_TMP_DIR}" \
     -v "${SCRIPT_FILE}:${SCRIPT_FILE}:ro" \
-    shellspec-remote -r "host.docker.internal:${HOST_BRIDGE_PORT}" ${SCRIPT_FILE}
+    shellspec-remote -r "host.docker.internal:${HOST_BRIDGE_PORT}" ${SCRIPT_ARGS} ${SCRIPT_FILE}
 fi

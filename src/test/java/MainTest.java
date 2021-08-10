@@ -16,6 +16,13 @@ public class MainTest {
               "localhost:9998", "-e", "FUNC=func_stream_output"))).isEqualTo(0);
    }
    @Test
+   public void itRunsWithStreamOutputFromOtherCommand() {
+      assertThat(doRun(() -> new Main("bash").execute(
+              Paths.get(System.getProperty("user.dir")).resolve(
+                      "src/test/resources/fixture-main.sh").toString(), "-r",
+              "localhost:9998", "-e", "FUNC=func_stream_output_2"))).isEqualTo(0);
+   }
+   @Test
    public void itCanFail() {
       assertThat(doRun(() -> new Main("bash").execute(
               Paths.get(System.getProperty("user.dir")).resolve(
@@ -43,7 +50,7 @@ public class MainTest {
          try {
             ScriptRuntime runtime = new ScriptRuntime();
             Process process = runtime.execute(
-                    new String[]{"bash", "-c", "nc -kl 9998 | " + Paths.get(
+                    new String[]{"bash", "-c", "nc -kl 9998 | stdbuf -o0 " + Paths.get(
                             System.getProperty("user.dir")).resolve(
                             "bridge.sh").toAbsolutePath()},
                     outputLine -> System.err.println(
