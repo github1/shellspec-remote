@@ -64,10 +64,11 @@ Context 'shellspec-remote'
       It 'should execute inside the container'
         When call local_uname
         The output should match pattern "*GNU/Linux*"
-      End  
+      End
   End
 End
 ```
 
 ## License
+
 [MIT](LICENSE.md)
