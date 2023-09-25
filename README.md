@@ -22,6 +22,10 @@ shellspec-remote ./README.md
 ## Examples
 
 ```bash
+./bin/cli.sh ./README.md
+```
+
+```bash
 # @OnHost
 setup() {
   bash -c "while true; do sleep 1; done" &
@@ -63,7 +67,7 @@ Context 'shellspec-remote'
   Describe 'calling a function without the @OnHost annotation'
       It 'should execute inside the container'
         When call local_uname
-        The output should match pattern "*GNU/Linux*"
+        The output should match pattern "*Linux*"
       End
   End
 End

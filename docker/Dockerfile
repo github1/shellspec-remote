@@ -1,8 +1,6 @@
-FROM openjdk:11.0.11-jre
+FROM amazoncorretto:20-alpine
 
-RUN apt-get update \
-    && apt-get install -y netcat-openbsd procps uuid-runtime jq \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache bash curl jq netcat-openbsd procps uuidgen
 
 WORKDIR /opt/app
 
