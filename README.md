@@ -1,9 +1,5 @@
 # shellspec-remote
 
-[![build status](https://img.shields.io/travis/github1/common/master.svg?style=flat-square)](https://travis-ci.org/github1/common)
-[![npm version](https://img.shields.io/npm/v/packages/common.svg?style=flat-square)](https://www.npmjs.com/package/packages/common)
-[![npm downloads](https://img.shields.io/npm/dm/packages/common.svg?style=flat-square)](https://www.npmjs.com/package/packages/common)
-
 ## Install
 
 ```shell
