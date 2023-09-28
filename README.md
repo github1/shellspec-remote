@@ -23,16 +23,20 @@ shellspec-remote ./README.md
 # @OnHost
 setup() {
   bash -c "while true; do sleep 1; done" &
-  BPID=$!
+  background_process_PID=$!
 }
 # @OnHost
 cleanup() {
-  if [[ -n "${BPID}" ]]; then
-    echo "killing ${BPID}"
-    kill -9 ${BPID}
+  if [[ -n "${background_process_PID}" ]]; then
+    echo "killing ${background_process_PID}"
+    kill -9 ${background_process_PID}
   else
-    echo "BPID not found"
+    echo "background_process_PID not found"
   fi
+}
+# @OnHost
+remote_var_is_set() {
+  [[ -n "${!1}" ]]
 }
 # @OnHost
 remote_uname() {
@@ -59,6 +63,9 @@ Context 'shellspec-remote'
   BeforeAll 'setup'
   AfterAll 'cleanup'
   Describe 'calling a function with the @OnHost annotation'
+      It 'can run remote background processes'
+        Assert remote_var_is_set background_process_PID
+      End
       It 'should execute on the docker host'
         When call remote_uname
         The output should match pattern "*Darwin*"
