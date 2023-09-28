@@ -7,7 +7,7 @@ f_invoke_remote() {
   echo 'invoke; '${l_UUID}' '${l_FID}' '$(echo "$@" | base64) | <NC_SEND> &
   tail -F "${l_SESSION_TEMP_DIR}/responsefile${l_UUID}" | while read line; do
     if echo $line | egrep -q '^exit; [0-9]+$'; then
-      pkill -fx "tail -F ${l_SESSION_TEMP_DIR}/responsefile${l_UUID}"
+      pkill -fx "tail -F ${l_SESSION_TEMP_DIR}/responsefile${l_UUID}" > /dev/null 2>&1
       break
     else
       echo $line
@@ -16,6 +16,6 @@ f_invoke_remote() {
   local l_EXIT_STATUS=$(tail -n 1 "${l_SESSION_TEMP_DIR}/responsefile${l_UUID}" | awk '{print $2}')
   rm "${l_SESSION_TEMP_DIR}/responsefile${l_UUID}"
   if [[ "${l_EXIT_STATUS}" != "0" ]]; then
-    exit ${l_EXIT_STATUS}
+    return ${l_EXIT_STATUS}
   fi
 }

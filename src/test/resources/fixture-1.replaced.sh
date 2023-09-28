@@ -1,5 +1,6 @@
 echo 'define; Fsetup_ ZnVuY3Rpb24gRnNldHVwXygpIHsKaG9zdG5hbWUKfQo=' | nc localhost 1234
 echo 'define; Fcleanup_ ZnVuY3Rpb24gRmNsZWFudXBfKCkgewpob3N0bmFtZQp9Cg==' | nc localhost 1234
+echo 'define; FhasExit_ ZnVuY3Rpb24gRmhhc0V4aXRfKCkgewplY2hvICdleGl0OyA0CmV4aXQgMAp9Cg==' | nc localhost 1234
 echo 'define; FsendGraph_ ZnVuY3Rpb24gRnNlbmRHcmFwaF8oKSB7CmVjaG8gIm1hcmtldF9zZWdtZW50Igp9Cg==' | nc localhost 1234
 f_invoke_remote() {
   local l_FID="${1}"
@@ -29,6 +30,10 @@ f_invoke_remote Fsetup_ $@
 # @OnHost
 cleanup(){
 f_invoke_remote Fcleanup_ $@
+}
+# @OnHost
+hasExit(){
+f_invoke_remote FhasExit_ $@
 }
 # @OnHost
 sendGraph(){

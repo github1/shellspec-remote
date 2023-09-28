@@ -33,13 +33,6 @@ final class Utils {
          // ignore
       }
    }
-   static Path determineBaseDir(Path baseDir) {
-      return Utils.pathWithFallback(
-              baseDir.resolve("./packages/common/cucumber-bash"), baseDir);
-   }
-   static Path pathWithFallback(Path initial, Path fallback) {
-      return Files.exists(initial) ? initial : fallback;
-   }
    static String loadResource(String name) {
       return FILE_CACHE.computeIfAbsent(name, s -> {
          try {
@@ -199,7 +192,20 @@ final class Utils {
       for (Map.Entry<String, String> func : extracted.entrySet()) {
          StringBuilder funcWrapper = new StringBuilder("function ").append(
                  func.getKey()).append("() {\n");
-         funcWrapper.append(func.getValue()).append("\n");
+         String funcValue = func.getValue();
+         List<String> funcLines = Arrays.asList(funcValue.split("\n"));
+         List<String> newFuncLines = new ArrayList<>();
+         for (int i = 0; i < funcLines.size(); i++) {
+            String funcLine = funcLines.get(i);
+            Pattern exitPattern = Pattern.compile("exit ([^;]+)");
+            Matcher exitMatcher = exitPattern.matcher(funcLine);
+            if (exitMatcher.matches()) {
+               newFuncLines.add(String.format("return %s", exitMatcher.group(1)));
+            } else {
+               newFuncLines.add(funcLine);
+            }
+         }
+         funcWrapper.append(String.join("\n", newFuncLines)).append("\n");
          funcWrapper.append("}\n");
          defineRemoteString(func.getKey(), funcWrapper.toString(),
                  remoteHostPort, finalScript);

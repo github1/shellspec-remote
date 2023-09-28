@@ -54,7 +54,7 @@ public class UtilsTest {
       assertThat(replaced.getReplacedScript()).isEqualTo(fixtureReplaced);
       List<String> replacements = new ArrayList<>(
               replaced.getExtracted().values());
-      assertThat(replacements).containsExactly("hostname", "hostname",
+      assertThat(replacements).containsExactly("hostname", "hostname", "exit 4",
               "echo \"market_segment\"");
    }
    @Test

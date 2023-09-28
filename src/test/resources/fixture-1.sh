@@ -7,6 +7,10 @@ cleanup() {
   hostname
 }
 # @OnHost
+hasExit() {
+  exit 4
+}
+# @OnHost
 sendGraph() { echo "market_segment"; }
 Context 'graph.sh'
   BeforeAll 'setup'

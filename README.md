@@ -39,6 +39,10 @@ remote_uname() {
   uname -a
 }
 # @OnHost
+remote_exit_with() {
+  exit "$1"
+}
+# @OnHost
 remote_file() {
   cat ./sample.json
 }
@@ -47,6 +51,9 @@ local_pipe_from_remote() {
 }
 local_uname() {
   uname -a
+}
+local_exit_with() {
+  return "$1"
 }
 Context 'shellspec-remote'
   BeforeAll 'setup'
@@ -57,11 +64,19 @@ Context 'shellspec-remote'
         The output should match pattern "*Darwin*"
         The output should not equal "$(local_uname)"
       End
+      It 'can exit with a code'
+        When call remote_exit_with 3
+        The status should eq 3
+      End
   End
   Describe 'calling a function without the @OnHost annotation'
       It 'should execute inside the container'
         When call local_uname
         The output should match pattern "*Linux*"
+      End
+      It 'can exit with a code'
+        When call local_exit_with 3
+        The status should eq 3
       End
   End
 End
